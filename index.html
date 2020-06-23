@@ -36,7 +36,6 @@
     <div id="container"></div>
     <script src="js/three.min.js"></script>
     <script src="js/OrbitControls.js"></script>
-    -->
     <!-- ----------------------------------------------------------- -->
     <script>
         // Color settings
@@ -47,89 +46,6 @@
         const GROUP_LABEL_COLOR = "#888888";
         const AXIS_COLOR = 0x505050;
         const GROUP_COLORS = [0x660000, 0x006600, 0x000066, 0x330000, 0x003300, 0x000033];
-
-        var groups = [
-            {
-                "id": 1,
-                "name": "アニメ",
-                "x": 0.763,
-                "y": 0.982,
-                "z": -0.602
-            },
-            {
-                "id": 2,
-                "name": "料理",
-                "x": -0.763,
-                "y": 0.645,
-                "z": 0.345
-            },
-            {
-                "id": 3,
-                "name": "経営",
-                "x": -0.223,
-                "y": -0.745,
-                "z": 0.345
-            }
-        ];
-
-        var nodes = [
-            {
-                "tag": "宇宙戦艦ヤマト",
-                "group_id": 1,
-                "x": 0.567,
-                "y": 0.332,
-                "z": -0.345
-            },
-            {
-                "tag": "ポムポムプリン",
-                "group_id": 1,
-                "x": 0.223,
-                "y": 0.423,
-                "z": -0.120
-            },
-            {
-                "tag": "ちおちゃんの通学路",
-                "group_id": 1,
-                "x": 0.559,
-                "y": 0.8273,
-                "z": -0.582
-            },
-            {
-                "tag": "餃子の王将",
-                "group_id": 2,
-                "x": -0.463,
-                "y": 0.982,
-                "z": 0.754
-            },
-            {
-                "tag": "行列のできるラーメン屋",
-                "group_id": 2,
-                "x": -0.342,
-                "y": 0.190,
-                "z": 0.583
-            },
-            {
-                "tag": "マーケティングディレクター",
-                "group_id": 3,
-                "x": -0.463,
-                "y": -0.982,
-                "z": 0.754
-            },
-            {
-                "tag": "東京オリンピック",
-                "group_id": 3,
-                "x": -0.263,
-                "y": -0.332,
-                "z": 0.375
-            },
-            {
-                "tag": "ユニコーン",
-                "group_id": 3,
-                "x": -0.463,
-                "y": -0.132,
-                "z": 0.325
-            }
-        ];
 
         var mouseX = 0;
         var mouseY = 0;
@@ -144,6 +60,7 @@
             buttons[i].addEventListener("click", onButtonClick, false);
         };
 
+
         function onButtonClick(event) {
             if (event.target.id == "reset") {
                 controls.reset();
@@ -155,51 +72,73 @@
 
         resetSelection();
 
-        var roomSize = 10;
-        // scene
-        var scene = new THREE.Scene();
+        var groups;
+        var nodes;
+        readTextFile("./test.json", function (text) {
+            var data = JSON.parse(text);
+            groups = data.groups;
+            nodes = data.nodes;
+            console.log(data);
+            init();
+        });
 
-        //etc
-        var clock = new THREE.Clock();
-        var raycaster = new THREE.Raycaster();
-        var mouse = new THREE.Vector2();
+        var scene;
+        var camera;
+        var renderer;
+        var downEvent;
+        var mouse;
+        var raycaster;
+        var clock;
 
-        // camera
-        var camera = new THREE.PerspectiveCamera(
-            45, window.innerWidth / window.innerHeight);
-        camera.position.set(0, 0, roomSize);
+        function init() {
 
-        // renderer
-        var renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
+            var roomSize = 10;
+            // scene
+            scene = new THREE.Scene();
 
-        // orbitControls
-        controls = new THREE.OrbitControls(camera, renderer.domElement);
-        controls.maxDistance = roomSize;
-        controls.minDistance = 0;
+            //etc
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+            clock = new THREE.Clock();
 
-        document.getElementById('container').appendChild(renderer.domElement);
+            // camera
+            camera = new THREE.PerspectiveCamera(
+                45, window.innerWidth / window.innerHeight);
+            camera.position.set(0, 0, roomSize);
 
-        //Lights
-        var ambient = new THREE.AmbientLight(0xFFFFFF, 1);
-        scene.add(ambient);
-        var directional = new THREE.DirectionalLight(0xFFFFFF, 0.5);
-        directional.position.set(1, 1, 1).normalize();
-        scene.add(directional);
+            // renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
 
-        // Room objects
-        createRoom(roomSize)
+            // orbitControls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.maxDistance = roomSize;
+            controls.minDistance = 0;
+            controls.screenSpacePanning = true;
 
-        createAxisLine();
+            document.getElementById('container').appendChild(renderer.domElement);
 
-        createModel();
+            //Lights
+            var ambient = new THREE.AmbientLight(0xFFFFFF, 1);
+            scene.add(ambient);
+            var directional = new THREE.DirectionalLight(0xFFFFFF, 0.5);
+            directional.position.set(1, 1, 1).normalize();
+            scene.add(directional);
 
-        window.addEventListener('resize', onWindowResize, false);
-        document.addEventListener('mousedown', onDocumentMouseDown, false);
-        document.addEventListener('touchstart', onDocumentTouchStart, false);
-        var downEvent = false;
+            // Room objects
+            createRoom(roomSize)
 
-        animate();
+            createAxisLine();
+
+            createModel();
+
+            window.addEventListener('resize', onWindowResize, false);
+            document.addEventListener('mousedown', onDocumentMouseDown, false);
+            document.addEventListener('touchstart', onDocumentTouchStart, false);
+            downEvent = false;
+
+            animate();
+        }
 
         function render() {
             if (downEvent) {
@@ -339,6 +278,19 @@
             scene.add(axis_top);
         }
 
+        function calcGroupRadius(index) {
+            var minDistance = 0;
+            var center = new THREE.Vector3(groups[index].x, groups[index].y, groups[index].z);
+            var id = groups[index].id;
+            for (var i = 0; i < nodes.length; i++) {
+                var tag = nodes[i];
+                if (tag.group_id != id) continue;
+                tagCenter = new THREE.Vector3(tag.x, tag.y, tag.z);
+                var d = center.distanceTo(tagCenter);
+                if (minDistance < d) minDistance = d;
+            }
+            return minDistance;
+        }
 
         var group_top;
         function createModel() {
@@ -346,18 +298,18 @@
             group_top = new THREE.Object3D;
 
             for (var i = 0; i < groups.length; i++) {
+                var radius = calcGroupRadius(i) * 1.1;
+                if (radius <= 0) continue;
                 var group = groups[i];
                 var parent = new THREE.Object3D();
-                var sphere = new THREE.SphereGeometry(0.7, 32, 32);
+                var sphere = new THREE.SphereGeometry(radius, 32, 32);
                 var color = GROUP_COLORS[i];
                 var material = new THREE.MeshPhongMaterial({
                     transparent: true, opacity: 0.2, color: color, depthTest: false
                 });
                 var mesh = new THREE.Mesh(sphere, material);
                 parent.add(mesh);
-                parent.position.x = group["x"];
-                parent.position.y = group["y"];
-                parent.position.z = group["z"];
+                parent.position.set(group["x"], group["y"], group["z"]);
                 var label = makeTextSprite(group["name"], 0.3, GROUP_LABEL_COLOR);
                 parent.add(label);
                 group_top.add(parent);
@@ -371,7 +323,6 @@
             for (var i = 0; i < nodes.length; i++) {
                 var tag = nodes[i];
                 var tagParent = new THREE.Object3D();
-                var tagBody = new THREE.Object3D();
                 var tagSphere = new THREE.SphereGeometry(0.03, 32, 32);
                 var color = GROUP_COLORS[tag.group_id - 1];
                 var tagMaterial = new THREE.MeshPhongMaterial({
@@ -379,12 +330,9 @@
                     specular: 0xcccccc, shininess: 50, metal: true
                 });
                 var tagMesh = new THREE.Mesh(tagSphere, tagMaterial);
-                tagMesh.userData = { "tag": tag["tag"] };
-                tagBody.add(tagMesh)
-                tagParent.add(tagBody);
-                tagParent.position.x = tag["x"];
-                tagParent.position.y = tag["y"];
-                tagParent.position.z = tag["z"];
+                tagMesh.userData = { "tag": tag.tag, "groupid": tag.group_id };
+                tagParent.add(tagMesh);
+                tagParent.position.set(tag["x"], tag["y"], tag["z"]);
                 var tagLabel = makeTextSprite(tag["tag"], 0.05, TAG_LABEL_COLOR);
                 tagLabel.position.set(0, 0.1, 0);
                 tagParent.add(tagLabel);
@@ -481,6 +429,19 @@
             sprite.scale.set(aspect * scale, scale, scale);
             return sprite;
         }
+
+        function readTextFile(file, callback) {
+            var rawFile = new XMLHttpRequest();
+            rawFile.overrideMimeType("application/json");
+            rawFile.open("GET", file, true);
+            rawFile.onreadystatechange = function () {
+                if (rawFile.readyState === 4) {
+                    callback(rawFile.responseText);
+                }
+            }
+            rawFile.send(null);
+        }
+
 
     </script>
 </body>
