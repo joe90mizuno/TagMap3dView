@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+    <title>Tag map demo</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        html,
+        body {
+            height: 100%;
+        }
+
+        body {
+            background-color: #ece4e4;
+            margin: 0;
+            font-family: Arial;
+            overflow: hidden;
+        }
+
+        .ui {
+            position: absolute;
+        }
+
+        button {
+            margin: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="title" style="width:100%;height:50px;text-align: center; color:black;" class="ui">Tag Map Demo</div>
+    <button style="left:0; bottom:0;" id="hide" class="ui">Hide Group</button>
+    <button style="right:0; bottom:0;" id="reset" class="ui">Reset Camera</button>
+    <div id="container"></div>
+    <script src="js/three.min.js"></script>
+    <script src="js/OrbitControls.js"></script>
+    -->
+    <!-- ----------------------------------------------------------- -->
+    <script>
+        // Color settings
+        const WALL_COLOR = 0xbbbbbb;
+        const FLOOR_COLOR = 0x888888;
+        const CEILING_COLOR = 0xffffff;
+        const TAG_LABEL_COLOR = 0x101010;
+        const GROUP_LABEL_COLOR = "#888888";
+        const AXIS_COLOR = 0x505050;
+        const GROUP_COLORS = [0x660000, 0x006600, 0x000066, 0x330000, 0x003300, 0x000033];
+
+        var groups = [
+            {
+                "id": 1,
+                "name": "アニメ",
+                "x": 0.763,
+                "y": 0.982,
+                "z": -0.602
+            },
+            {
+                "id": 2,
+                "name": "料理",
+                "x": -0.763,
+                "y": 0.645,
+                "z": 0.345
+            },
+            {
+                "id": 3,
+                "name": "経営",
+                "x": -0.223,
+                "y": -0.745,
+                "z": 0.345
+            }
+        ];
+
+        var nodes = [
+            {
+                "tag": "宇宙戦艦ヤマト",
+                "group_id": 1,
+                "x": 0.567,
+                "y": 0.332,
+                "z": -0.345
+            },
+            {
+                "tag": "ポムポムプリン",
+                "group_id": 1,
+                "x": 0.223,
+                "y": 0.423,
+                "z": -0.120
+            },
+            {
+                "tag": "ちおちゃんの通学路",
+                "group_id": 1,
+                "x": 0.559,
+                "y": 0.8273,
+                "z": -0.582
+            },
+            {
+                "tag": "餃子の王将",
+                "group_id": 2,
+                "x": -0.463,
+                "y": 0.982,
+                "z": 0.754
+            },
+            {
+                "tag": "行列のできるラーメン屋",
+                "group_id": 2,
+                "x": -0.342,
+                "y": 0.190,
+                "z": 0.583
+            },
+            {
+                "tag": "マーケティングディレクター",
+                "group_id": 3,
+                "x": -0.463,
+                "y": -0.982,
+                "z": 0.754
+            },
+            {
+                "tag": "東京オリンピック",
+                "group_id": 3,
+                "x": -0.263,
+                "y": -0.332,
+                "z": 0.375
+            },
+            {
+                "tag": "ユニコーン",
+                "group_id": 3,
+                "x": -0.463,
+                "y": -0.132,
+                "z": 0.325
+            }
+        ];
+
+        var mouseX = 0;
+        var mouseY = 0;
+
+        var selectedObject;
+        var showGroup = true;
+        var windowHalfX = window.innerWidth / 2;
+        var windowHalfY = window.innerHeight / 2;
+
+        var buttons = document.getElementsByTagName("button");
+        for (let i = 0; i < buttons.length; i++) {
+            buttons[i].addEventListener("click", onButtonClick, false);
+        };
+
+        function onButtonClick(event) {
+            if (event.target.id == "reset") {
+                controls.reset();
+            };
+            if (event.target.id == "hide") {
+                hideGroup();
+            }
+        }
+
+        resetSelection();
+
+        var roomSize = 10;
+        // scene
+        var scene = new THREE.Scene();
+
+        //etc
+        var clock = new THREE.Clock();
+        var raycaster = new THREE.Raycaster();
+        var mouse = new THREE.Vector2();
+
+        // camera
+        var camera = new THREE.PerspectiveCamera(
+            45, window.innerWidth / window.innerHeight);
+        camera.position.set(0, 0, roomSize);
+
+        // renderer
+        var renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        // orbitControls
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.maxDistance = roomSize;
+        controls.minDistance = 0;
+
+        document.getElementById('container').appendChild(renderer.domElement);
+
+        //Lights
+        var ambient = new THREE.AmbientLight(0xFFFFFF, 1);
+        scene.add(ambient);
+        var directional = new THREE.DirectionalLight(0xFFFFFF, 0.5);
+        directional.position.set(1, 1, 1).normalize();
+        scene.add(directional);
+
+        // Room objects
+        createRoom(roomSize)
+
+        createAxisLine();
+
+        createModel();
+
+        window.addEventListener('resize', onWindowResize, false);
+        document.addEventListener('mousedown', onDocumentMouseDown, false);
+        document.addEventListener('touchstart', onDocumentTouchStart, false);
+        var downEvent = false;
+
+        animate();
+
+        function render() {
+            if (downEvent) {
+                scanObject();
+                downEvent = false;
+            }
+            renderer.render(scene, camera);
+            update();
+        }
+
+        function scanObject() {
+            raycaster.setFromCamera(mouse, camera);
+            var intersects = raycaster.intersectObjects(scene.children, true);
+            if (intersects.length > 0) {
+                for (var i = 0; i < intersects.length; i++) {
+                    var target = intersects[i].object;
+                    if ("userData" in target) {
+                        var userData = target.userData;
+                        if ("tag" in userData) {
+
+
+                            if (selectedObject != target) {
+
+                                if (selectedObject) selectedObject.material.emissive.setHex(selectedObject.currentHex);
+
+                                selectedObject = target;
+                                selectedObject.currentHex = selectedObject.material.emissive.getHex();
+                                selectedObject.material.emissive.setHex(0xdddddd);
+                                var title = document.getElementById("title");
+                                title.textContent = "「" + userData["tag"] + "」に興味がありますか？";
+                            }
+                            else {
+                                resetSelection();
+                            }
+                        }
+                    }
+                }
+            }
+            else {
+                resetSelection();
+            }
+        }
+
+        function resetSelection() {
+            if (selectedObject) selectedObject.material.emissive.setHex(selectedObject.currentHex);
+            selectedObject = null;
+            var title = document.getElementById("title");
+            title.textContent = "興味のあるタグを選択してください。";
+        }
+
+        function onWindowResize() {
+
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setClearColor(0xa0a0a0, 0);
+
+        }
+
+        function createRoom(room_size) {
+            var ground = new THREE.Mesh(
+                new THREE.PlaneBufferGeometry(room_size, room_size, 1, 1),
+                new THREE.MeshPhongMaterial({ color: FLOOR_COLOR, shininess: 150 })
+            );
+            ground.rotation.x = - Math.PI / 2;
+            ground.position.set(0, -room_size / 2, 0);
+            scene.add(ground);
+
+            var sky = new THREE.Mesh(
+                new THREE.PlaneBufferGeometry(room_size, room_size, 1, 1),
+                new THREE.MeshPhongMaterial({ color: CEILING_COLOR, shininess: 150 })
+            );
+            sky.rotation.x = Math.PI / 2;
+            sky.position.set(0, room_size / 2, 0);
+            scene.add(sky);
+
+            var north = new THREE.Mesh(
+                new THREE.PlaneBufferGeometry(room_size, room_size, 1, 1),
+                new THREE.MeshPhongMaterial({ color: WALL_COLOR, shininess: 150 })
+            );
+            north.position.set(0, 0, -room_size / 2);
+            scene.add(north);
+
+            var east = new THREE.Mesh(
+                new THREE.PlaneBufferGeometry(room_size, room_size, 1, 1),
+                new THREE.MeshPhongMaterial({ color: WALL_COLOR, shininess: 150 })
+            );
+            east.rotation.y = - Math.PI / 2;
+            east.position.set(room_size / 2, 0, 0);
+            scene.add(east);
+
+            var west = new THREE.Mesh(
+                new THREE.PlaneBufferGeometry(room_size, room_size, 1, 1),
+                new THREE.MeshPhongMaterial({ color: WALL_COLOR, shininess: 150 })
+            );
+            west.rotation.y = Math.PI / 2;
+            west.position.set(-room_size / 2, 0, 0);
+            scene.add(west);
+
+            var south = new THREE.Mesh(
+                new THREE.PlaneBufferGeometry(room_size, room_size, 1, 1),
+                new THREE.MeshPhongMaterial({ color: WALL_COLOR, shininess: 150 })
+            );
+            south.rotation.y = Math.PI;
+            south.position.set(0, 0, room_size / 2);
+            scene.add(south);
+        }
+
+        var axis_top;
+        function createAxisLine() {
+
+            axis_top = new THREE.Object3D;
+            // Axis line
+            var mat_line = new THREE.LineBasicMaterial({ color: AXIS_COLOR });
+            var x_axis = [];
+            x_axis.push(new THREE.Vector3(- 1.5, 0, 0));
+            x_axis.push(new THREE.Vector3(1.5, 0, 0));
+            var geo_x_axis = new THREE.BufferGeometry().setFromPoints(x_axis);
+            var y_axis = [];
+            y_axis.push(new THREE.Vector3(0, - 1.5, 0));
+            y_axis.push(new THREE.Vector3(0, 1.5, 0));
+            var geo_y_axis = new THREE.BufferGeometry().setFromPoints(y_axis);
+            var z_axis = [];
+            z_axis.push(new THREE.Vector3(0, 0, - 1.5));
+            z_axis.push(new THREE.Vector3(0, 0, 1.5));
+            var geo_z_axis = new THREE.BufferGeometry().setFromPoints(z_axis);
+            var line_x_axis = new THREE.Line(geo_x_axis, mat_line);
+            var line_y_axis = new THREE.Line(geo_y_axis, mat_line);
+            var line_z_axis = new THREE.Line(geo_z_axis, mat_line);
+
+            axis_top.add(line_x_axis);
+            axis_top.add(line_y_axis);
+            axis_top.add(line_z_axis);
+
+            scene.add(axis_top);
+        }
+
+
+        var group_top;
+        function createModel() {
+            // Groups
+            group_top = new THREE.Object3D;
+
+            for (var i = 0; i < groups.length; i++) {
+                var group = groups[i];
+                var parent = new THREE.Object3D();
+                var sphere = new THREE.SphereGeometry(0.7, 32, 32);
+                var color = GROUP_COLORS[i];
+                var material = new THREE.MeshPhongMaterial({
+                    transparent: true, opacity: 0.2, color: color, depthTest: false
+                });
+                var mesh = new THREE.Mesh(sphere, material);
+                parent.add(mesh);
+                parent.position.x = group["x"];
+                parent.position.y = group["y"];
+                parent.position.z = group["z"];
+                var label = makeTextSprite(group["name"], 0.3, GROUP_LABEL_COLOR);
+                parent.add(label);
+                group_top.add(parent);
+            }
+            scene.add(group_top);
+
+
+            // Tags
+
+            tag_top = new THREE.Object3D;
+            for (var i = 0; i < nodes.length; i++) {
+                var tag = nodes[i];
+                var tagParent = new THREE.Object3D();
+                var tagBody = new THREE.Object3D();
+                var tagSphere = new THREE.SphereGeometry(0.03, 32, 32);
+                var color = GROUP_COLORS[tag.group_id - 1];
+                var tagMaterial = new THREE.MeshPhongMaterial({
+                    color: color, ambient: 0xff0000,
+                    specular: 0xcccccc, shininess: 50, metal: true
+                });
+                var tagMesh = new THREE.Mesh(tagSphere, tagMaterial);
+                tagMesh.userData = { "tag": tag["tag"] };
+                tagBody.add(tagMesh)
+                tagParent.add(tagBody);
+                tagParent.position.x = tag["x"];
+                tagParent.position.y = tag["y"];
+                tagParent.position.z = tag["z"];
+                var tagLabel = makeTextSprite(tag["tag"], 0.05, TAG_LABEL_COLOR);
+                tagLabel.position.set(0, 0.1, 0);
+                tagParent.add(tagLabel);
+                tag_top.add(tagParent)
+            }
+            scene.add(tag_top);
+
+        }
+
+        function hideGroup() {
+            showGroup = !showGroup;
+            if (showGroup) {
+                scene.add(group_top);
+                var btn = document.getElementById("hide");
+                btn.textContent = "Hide Group";
+            }
+            else {
+                var btn = document.getElementById("hide");
+                btn.textContent = "Show Group";
+                scene.remove(group_top);
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            render();
+        }
+
+        function update() {
+            var delta = clock.getDelta();
+            var angle = delta * 0.1;
+            controls.update();
+        }
+
+        function onDocumentTouchStart(e) {
+            downEvent = true;
+            mouse.x = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function onDocumentMouseDown(e) {
+            downEvent = true;
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function makeTextSprite(text, scale, color) {
+            var font = "System";
+            var size = 96;
+
+            font = "bold " + size + "px " + font;
+
+            var canvas = document.createElement('canvas');
+            var context = canvas.getContext('2d');
+            context.font = font;
+
+            var line = 0;
+            var lineText = [""];
+            var maxWidth = 0;
+            for (var i = 0; i < text.length; i++) {
+                var char = text.charAt(i);
+                if (char == "\n") {
+                    var width = context.measureText(lineText[line]).width;
+                    if (maxWidth < width) {
+                        maxWidth = width;
+                    }
+                    line++;
+                    lineText[line] = "";
+                    continue;
+                }
+                lineText[line] += char;
+            }
+            var width = context.measureText(lineText[line]).width;
+            if (maxWidth < width) {
+                maxWidth = width;
+            }
+            canvas.width = maxWidth + 2;
+            canvas.height = ((size + 1) * lineText.length) + 2;
+
+            context.font = font;
+            context.fillStyle = color;
+            for (var j = 0; j < lineText.length; j++) {
+                context.fillText(lineText[j], 1, size + (size + 1) * j);
+            }
+
+            // canvas contents will be used for a texture
+            var texture = new THREE.Texture(canvas);
+            texture.needsUpdate = true;
+
+            var spriteMaterial = new THREE.SpriteMaterial(
+                { map: texture });
+            var aspect = canvas.width / canvas.height;
+            var sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(aspect * scale, scale, scale);
+            return sprite;
+        }
+
+    </script>
+</body>
+
+</html>
